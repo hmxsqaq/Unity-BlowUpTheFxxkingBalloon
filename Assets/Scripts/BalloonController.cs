@@ -1,9 +1,12 @@
-﻿using Hmxs.Toolkit.Flow.Timer;
+﻿using System.Collections.Generic;
+using Hmxs.Toolkit.Flow.Timer;
+using Hmxs.Toolkit.Module.Audios;
 using Hmxs.Toolkit.Module.Events;
 using Lofelt.NiceVibrations;
 using MoreMountains.Feedbacks;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using AudioType = Hmxs.Toolkit.Module.Audios.AudioType;
 
 public class BalloonController : MonoBehaviour
 {
@@ -26,17 +29,29 @@ public class BalloonController : MonoBehaviour
     [SerializeField] private MMF_Player cameraShake;
     [SerializeField] private MMF_Player blowUpFeedbackInstant;
     [SerializeField] private MMF_Player blowUpFeedbackContinuous;
+    [SerializeField] private MMF_Player blowUpEndFeedback;
     [SerializeField] private MMF_Player explosionFeedback;
+    [SerializeField] private MMF_Player audioFeedback;
+    [SerializeField] private MMF_Player blowUpAudioFeedback;
+    [SerializeField] private MMF_Player boomAudioFeedback;
+    [SerializeField] private GameObject boomEffect;
 
     [Title("Info")]
-    [ShowInInspector] [ReadOnly] private float _maxSize;
-    [ShowInInspector] [ReadOnly] private float _sizeThreshold;
-    [ShowInInspector] [ReadOnly] private float _currentSize;
-    [ShowInInspector] [ReadOnly] private float _blowUpTimeCounter;
-    [ShowInInspector] [ReadOnly] private float _blowUpSpeed;
+    [SerializeField] [ReadOnly] private float maxSize;
+    [SerializeField] [ReadOnly] private float sizeThreshold;
+    [SerializeField] [ReadOnly] private float currentSize;
+    [SerializeField] [ReadOnly] private float blowUpTimeCounter;
+    [SerializeField] [ReadOnly] private float blowUpSpeed;
+
+    private SpriteRenderer _spriteRenderer;
 
     private void Start()
     {
+        _spriteRenderer = GetComponent<SpriteRenderer>();
+
+        AudioCenter.Instance.AudioPlaySync(new AudioAsset(AudioType.BGM, "背景音", true));
+        AudioCenter.Instance.SetVolume(AudioType.BGM, 0.2f);
+
         GameSetUp();
         // 继续游戏
         InputHandler.Instance.interact.performed += _ =>
@@ -49,46 +64,76 @@ public class BalloonController : MonoBehaviour
     private void Update()
     {
         if (InputHandler.Instance.IsActing)
+        {
             BlowUp();
+            if (blowUpFeedbackContinuous.isActiveAndEnabled)
+                blowUpFeedbackContinuous.StopFeedbacks();
+        }
         else
-            _blowUpTimeCounter = 0;
+        {
+            if (currentSize / (maxSize - sizeThreshold) > 0.75 && !blowUpFeedbackContinuous.isActiveAndEnabled)
+                blowUpFeedbackContinuous.PlayFeedbacks();
 
-        //if (InputHandler.Instance.act.WasPerformedThisFrame()) blowUpFeedbackInstant.PlayFeedbacks();
-        if (InputHandler.Instance.act.WasReleasedThisFrame()) blowUpFeedbackInstant.PlayFeedbacks();
+            if (blowUpFeedbackInstant.isActiveAndEnabled)
+                blowUpFeedbackInstant.StopFeedbacks();
+
+            if (blowUpAudioFeedback.isActiveAndEnabled)
+                blowUpAudioFeedback.StopFeedbacks();
+
+            blowUpTimeCounter = 0;
+        }
+
+        // if (InputHandler.Instance.act.WasPerformedThisFrame())
+        //     audioFeedback.PlayFeedbacks();
+
+        if (InputHandler.Instance.act.WasReleasedThisFrame())
+        {
+            blowUpEndFeedback.PlayFeedbacks();
+            audioFeedback.PlayFeedbacks();
+        }
     }
 
     private void GameSetUp()
     {
-        _maxSize = Random.Range(maxSizeRange.x, maxSizeRange.y);
-        _sizeThreshold = Random.Range(sizeThresholdRange.x, sizeThresholdRange.y);
-        _currentSize = initSize;
-        transform.localScale = new Vector3(_currentSize, _currentSize, 1);
+        _spriteRenderer.enabled = true;
+        maxSize = Random.Range(maxSizeRange.x, maxSizeRange.y);
+        sizeThreshold = Random.Range(sizeThresholdRange.x, sizeThresholdRange.y);
+        currentSize = initSize;
+        transform.localScale = new Vector3(currentSize, currentSize, 1);
     }
 
     private void BlowUp()
     {
-        _blowUpTimeCounter += Time.deltaTime;
-        _blowUpSpeed = blowUpCurve.Evaluate(_blowUpTimeCounter);
-        _currentSize = Mathf.Lerp(_currentSize, _maxSize, _blowUpSpeed * Time.deltaTime);
-        transform.localScale = new Vector3(_currentSize, _currentSize, 1);
+        blowUpTimeCounter += Time.deltaTime;
+        blowUpSpeed = blowUpCurve.Evaluate(blowUpTimeCounter);
+        currentSize = Mathf.Lerp(currentSize, maxSize, blowUpSpeed * Time.deltaTime);
+        transform.localScale = new Vector3(currentSize, currentSize, 1);
 
         cameraShake.PlayFeedbacks();
-        blowUpFeedbackContinuous.PlayFeedbacks();
-        HapticPatterns.PlayEmphasis(_currentSize / _maxSize, _currentSize / _maxSize);
+        blowUpFeedbackInstant.PlayFeedbacks();
+        HapticPatterns.PlayEmphasis(currentSize / maxSize, currentSize / maxSize);
+        if (!blowUpAudioFeedback.isActiveAndEnabled) blowUpAudioFeedback.PlayFeedbacks(); // 吹气音效
 
-        if (_currentSize >= _maxSize - _sizeThreshold)
+        if (currentSize >= maxSize - sizeThreshold)
         {
-            cameraShake.StopFeedbacks();
-            blowUpFeedbackContinuous.StopFeedbacks();
-            InputHandler.Instance.InputControls.Game.Disable();
+            if (cameraShake.isActiveAndEnabled)
+                cameraShake.StopFeedbacks();
+            if (blowUpFeedbackInstant.isActiveAndEnabled)
+                blowUpFeedbackInstant.StopFeedbacks();
+            InputHandler.Instance.InputControls.Game.Disable(); // 禁用输入
+            HapticPatterns.PlayConstant(1, 1, 1); // 振动
+            Instantiate(boomEffect); // 爆炸动画
+            explosionFeedback.PlayFeedbacks(); // 爆炸粒子
+            boomAudioFeedback.PlayFeedbacks(); // 播放爆炸音效
+            _spriteRenderer.enabled = false; // 隐藏气球
+
             Time.timeScale = 0.2f;
-            explosionFeedback.PlayFeedbacks();
+
             Timer.Register(
                 duration: 2f,
                 onComplete: () => Events.Trigger(EventGroups.OnBalloonExploded),
                 useRealTime: true
                 );
-            Debug.Log("气球爆炸");
         }
     }
 }
