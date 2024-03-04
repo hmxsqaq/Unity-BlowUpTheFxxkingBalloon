@@ -39,7 +39,11 @@ public class BalloonController : MonoBehaviour
     {
         GameSetUp();
         // 继续游戏
-        InputHandler.Instance.interact.performed += _ => GameSetUp();
+        InputHandler.Instance.interact.performed += _ =>
+        {
+            Time.timeScale = 1;
+            GameSetUp();
+        };
     }
 
     private void Update()
