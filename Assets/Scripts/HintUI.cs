@@ -12,7 +12,6 @@ public class HintUI : MonoBehaviour
     [SerializeField] private float idleTimeLimit;
 
     [SerializeField] private Image nextPanel;
-    [SerializeField] private TextMeshProUGUI nextText;
 
     [Title("Info")]
     [SerializeField] [ReadOnly] private float idleTimeCounter;
@@ -32,10 +31,6 @@ public class HintUI : MonoBehaviour
             nextPanel, 1f, 0, 0.5f,
             useRealTime: true,
             onComplete: () => InputHandler.Instance.InputControls.UI.Enable()
-        );
-        FadeHandler.Fade(
-            nextText, 1f, 0, 1f,
-            useRealTime: true
         );
         hintPanel.gameObject.SetActive(false);
     }

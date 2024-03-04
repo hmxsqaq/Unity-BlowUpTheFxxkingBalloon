@@ -1,4 +1,5 @@
-﻿using Hmxs.Toolkit.Module.Events;
+﻿using Hmxs.Toolkit.Flow.Timer;
+using Hmxs.Toolkit.Module.Events;
 using Lofelt.NiceVibrations;
 using MoreMountains.Feedbacks;
 using Sirenix.OdinInspector;
@@ -25,6 +26,7 @@ public class BalloonController : MonoBehaviour
     [SerializeField] private MMF_Player cameraShake;
     [SerializeField] private MMF_Player blowUpFeedbackInstant;
     [SerializeField] private MMF_Player blowUpFeedbackContinuous;
+    [SerializeField] private MMF_Player explosionFeedback;
 
     [Title("Info")]
     [ShowInInspector] [ReadOnly] private float _maxSize;
@@ -75,7 +77,13 @@ public class BalloonController : MonoBehaviour
             cameraShake.StopFeedbacks();
             blowUpFeedbackContinuous.StopFeedbacks();
             InputHandler.Instance.InputControls.Game.Disable();
-            Events.Trigger(EventGroups.OnBalloonExploded);
+            Time.timeScale = 0.2f;
+            explosionFeedback.PlayFeedbacks();
+            Timer.Register(
+                duration: 2f,
+                onComplete: () => Events.Trigger(EventGroups.OnBalloonExploded),
+                useRealTime: true
+                );
             Debug.Log("气球爆炸");
         }
     }
